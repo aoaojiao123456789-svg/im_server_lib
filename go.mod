@@ -1,4 +1,4 @@
-module github.com/chenjiaojiao12345-dev/im
+module github.com/aoaojiao123456789-svg/im_server_lib
 
 go 1.20
 
