@@ -89,9 +89,10 @@ const (
 	ReturnRedPacket = 1052
 
 	// --------- 转账类 ---------
-	SendTransfer   = 1060
-	GetTransfer    = 1061
-	ReturnTransfer = 1062
+	SendTransfer    = 1060
+	GetTransfer     = 1061
+	ReturnTransfer  = 1062
+	ExpiredTransfer = 1063
 
 	// ---------- 客服类 ----------
 	HotlineAssignTo ContentType = 1200 // 分配客服
