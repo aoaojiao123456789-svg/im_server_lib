@@ -349,7 +349,7 @@ func (c *Context) checkSign(ctx *wkhttp.Context, secret string) {
 	// 5️ 安全比较
 	// =========================
 	if !hmac.Equal([]byte(expected), []byte(sign)) {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"msg": "invalid sign"})
+		ctx.JSON(http.StatusUnauthorized, gin.H{"msg": "当前操作暂时无法继续,请关闭应用后重新打开,你的余额不会受到影响"})
 		ctx.Abort()
 		return
 	}
