@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"io"
 	"math"
 	"net"
@@ -16,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/RussellLuo/timingwheel"
 	"github.com/TangSengDaoDao/TangSengDaoDaoServerLib/common"
@@ -30,6 +31,8 @@ import (
 	"github.com/gocraft/dbr/v2"
 	"github.com/olivere/elastic"
 	"github.com/opentracing/opentracing-go"
+	"github.com/pquerna/otp"
+	"github.com/pquerna/otp/totp"
 )
 
 // Context 配置上下文
@@ -162,6 +165,67 @@ func (c *Context) AuthMiddlewareForIpRBAC(r *wkhttp.WKHttp) wkhttp.HandlerFunc {
 
 		ctx.Next()
 	}
+}
+
+// 认证中间件 - Google 验证码
+func (c *Context) AuthMiddlewareForGoogleCode() wkhttp.HandlerFunc {
+	return func(ctx *wkhttp.Context) {
+
+		strKey := "Code"
+		strCode := ctx.GetHeader(strKey)
+		if strCode == "" {
+			ctx.JSON(http.StatusUnauthorized, gin.H{"msg": "miss google code"})
+			ctx.Abort()
+			return
+		}
+
+		// Token 校验: 确保能够正确获取用户uid
+		c.checkAuth(ctx, c.Cache(), c.cfg.Cache.TokenCachePrefix)
+		if ctx.IsAborted() {
+			return
+		}
+
+		type managerLoginModel struct {
+			GoogleEnabled int    `db:"google_enabled" json:"google_enabled"`
+			GoogleSecret  string `db:"google_secret" json:"google_secret"`
+		}
+
+		adminUID := ctx.GetLoginUID()
+		var userInfo *managerLoginModel
+		_, err := c.mySQLSession.Select("*").From("admin_user").Where("uid=?", adminUID).Load(&userInfo)
+		if err != nil {
+			ctx.JSON(http.StatusUnauthorized, gin.H{"msg": "user error"})
+			ctx.Abort()
+			return
+		}
+
+		//谷歌验证码
+		if userInfo.GoogleEnabled == 1 {
+			verify, err := googleVerify(userInfo.GoogleSecret, strCode)
+			if err != nil || !verify {
+				ctx.JSON(http.StatusUnauthorized, gin.H{"msg": "google code error"})
+				ctx.Abort()
+				return
+			}
+		}
+
+		ctx.Next()
+	}
+}
+
+// Verify 校验谷歌验证码
+func googleVerify(secret string, code string) (bool, error) {
+	return totp.ValidateCustom(
+		code,
+		secret,
+		time.Now(),
+		totp.ValidateOpts{
+			Period:    30,
+			Skew:      1, // 前后各 30 秒
+			Digits:    otp.DigitsSix,
+			Algorithm: otp.AlgorithmSHA1,
+		},
+	)
 }
 
 // 认证中间件 - 签名
