@@ -5,11 +5,13 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
 	"net"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -165,6 +167,146 @@ func (c *Context) AuthMiddlewareForIpRBAC(r *wkhttp.WKHttp) wkhttp.HandlerFunc {
 
 		ctx.Next()
 	}
+}
+
+// SQLInjectionGuardMiddleware 防 SQL 注入中间件（纵深防御兜底）
+// 建议在 AuthMiddlewareForIpTokenRbacSign 之后串联使用，例如：
+//
+//	r.Group("/xxx", ctx.AuthMiddlewareForIpTokenRbacSign(secret), ctx.SQLInjectionGuardMiddleware())
+//
+// 该中间件扫描 URL 查询参数、表单参数、路由参数及 JSON body 中的字符串值，
+// 命中常见 SQL 注入特征即拦截。注意：根本防注入仍需依赖参数化查询（占位符 ?）。
+func (c *Context) SQLInjectionGuardMiddleware() wkhttp.HandlerFunc {
+	return func(ctx *wkhttp.Context) {
+
+		// 0) 统一读取并回放 body
+		// 必须放在 ParseForm / JSON 扫描之前，否则 ParseForm 在解析
+		// multipart/form-data 等类型时会消费掉 Body 流，导致后续读取为空、
+		// JSON 注入检测被绕过，且后续 handler 也读不到 body。
+		var bodyBytes []byte
+		if ctx.Request.Body != nil {
+			b, err := io.ReadAll(ctx.Request.Body)
+			if err == nil {
+				bodyBytes = b
+				ctx.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			}
+		}
+
+		// 1) URL 查询参数 (GET)
+		for _, values := range ctx.Request.URL.Query() {
+			for _, v := range values {
+				if detectSQLInjection(v) {
+					ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+						"msg":    "请求参数包含非法字符",
+						"status": http.StatusBadRequest,
+					})
+					return
+				}
+			}
+		}
+
+		// 2) 表单参数 (POST form)
+		_ = ctx.Request.ParseForm()
+		for _, values := range ctx.Request.PostForm {
+			for _, v := range values {
+				if detectSQLInjection(v) {
+					ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+						"msg":    "请求参数包含非法字符",
+						"status": http.StatusBadRequest,
+					})
+					return
+				}
+			}
+		}
+
+		// 3) 路由参数 (:id 等)
+		for _, p := range ctx.Params {
+			if detectSQLInjection(p.Value) {
+				ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+					"msg":    "请求参数包含非法字符",
+					"status": http.StatusBadRequest,
+				})
+				return
+			}
+		}
+
+		// 4) JSON Body —— 仅扫描字符串字段，使用已读取并回放的 bodyBytes
+		if len(bodyBytes) > 0 {
+			if detectSQLInjectionInJSON(bodyBytes) {
+				ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+					"msg":    "请求参数包含非法字符",
+					"status": http.StatusBadRequest,
+				})
+				return
+			}
+		}
+
+		ctx.Next()
+	}
+}
+
+// sqlInjectionPatterns SQL 注入常见特征（大小写不敏感）
+var sqlInjectionPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)(--|#|/\*)`),
+	regexp.MustCompile(`(?i)('|")(\s)*(or|and)?(\s)*(=|\s|$)`),
+	regexp.MustCompile(`(?i)(\bor\b|\band\b)\s+(\d+|'.*?')\s*=\s*(\d+|'.*?')`),
+	regexp.MustCompile(`(?i)(\bor\b|\band\b)\s+1\s*=\s*1`),
+	regexp.MustCompile(`(?i)(\bor\b|\band\b)\s+'1'\s*=\s*'1'`),
+	regexp.MustCompile(`(?i)\bunion\b.*\bselect\b`),
+	regexp.MustCompile(`(?i)\bselect\b.*\bfrom\b`),
+	regexp.MustCompile(`(?i)\binsert\b.*\binto\b`),
+	regexp.MustCompile(`(?i)\bdelete\b.*\bfrom\b`),
+	regexp.MustCompile(`(?i)\bdrop\b.*\btable\b`),
+	regexp.MustCompile(`(?i)\bupdate\b.*\bset\b`),
+	regexp.MustCompile(`(?i)\bsleep\s*\(`),
+	regexp.MustCompile(`(?i)\bbenchmark\s*\(`),
+	regexp.MustCompile(`(?i)\bwaitfor\b\s+delay\b`),
+	regexp.MustCompile(`(?i)\bxp_cmdshell\b`),
+	regexp.MustCompile(`(?i)\bload_file\s*\(`),
+	regexp.MustCompile(`(?i)\binformation_schema\b`),
+	regexp.MustCompile(`(?i);\s*(select|insert|update|delete|drop|truncate)`),
+}
+
+// detectSQLInjection 检测单条字符串是否疑似 SQL 注入
+func detectSQLInjection(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, re := range sqlInjectionPatterns {
+		if re.MatchString(s) {
+			return true
+		}
+	}
+	return false
+}
+
+// detectSQLInjectionInJSON 只扫描 JSON 中的 string 值
+func detectSQLInjectionInJSON(body []byte) bool {
+	var anyVal interface{}
+	if err := json.Unmarshal(body, &anyVal); err != nil {
+		return false
+	}
+	return scanValue(anyVal)
+}
+
+func scanValue(v interface{}) bool {
+	switch val := v.(type) {
+	case string:
+		return detectSQLInjection(val)
+	case map[string]interface{}:
+		for _, item := range val {
+			if scanValue(item) {
+				return true
+			}
+		}
+	case []interface{}:
+		for _, item := range val {
+			if scanValue(item) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // 认证中间件 - Google 验证码
