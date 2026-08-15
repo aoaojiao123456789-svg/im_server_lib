@@ -596,7 +596,13 @@ func (c *Context) checkAdminIPWhitelist(ctx *wkhttp.Context) {
 func (c *Context) checkAdminPermission(ctx *wkhttp.Context) {
 	adminUID := ctx.GetLoginUID()
 
-	path := ctx.Request.URL.Path
+	// 使用 FullPath() 拿到注册时的路由模式（如 /v1/users/:uid/avatar）
+	// 而非实际请求 URL（/v1/users/abc/avatar），保证与 sys_api_permission.api_path 精确匹配
+	path := ctx.FullPath()
+	if path == "" {
+		// 有些 handler 没在 gin 中注册路由（比如中间件返回 404 前），退回到原始 URL
+		path = ctx.Request.URL.Path
+	}
 	method := ctx.Request.Method
 
 	ok, err := c.adminPermission(adminUID, method, path)
@@ -707,14 +713,97 @@ func (c *Context) isIPInAdminWhitelist(ip string, clientId int, uid string) (boo
 	return cnt > 0, nil
 }
 
-// checkAdminPermission 判断管理员是否有接口访问权限（TODO: 待实现）
+// adminPermission 判断管理员是否有权访问指定接口
+//
+// 权限链路：
+//
+//	admin_user.uid → admin_user.role (superAdmin 直接放行) / group_id
+//	sys_api_permission (http_method, api_path, status=1) → 找到本次请求对应的权限 id
+//	sys_role_api_permission (role_id = group_id, api_permission_id) → 判定角色是否被授权
+//
+// 特殊规则：
+//   - uid == "admin" 或 role == "superAdmin"：全通行
+//   - 数据库里没有登记该 method+path 的权限记录：默认放行（不打破未登记接口）
+//   - 登记了但 super_admin_only=1 且当前用户不是超管：拒绝
+//   - 登记了且非 super_admin_only：需要 (group_id, permission_id) 在 sys_role_api_permission 中存在
 func (m *Context) adminPermission(
 	adminUID string,
 	method string,
 	path string,
 ) (bool, error) {
-	// TODO: 后续实现 RBAC 菜单 / API 权限校验
-	return true, nil
+	// 1. 超管快速通道
+	if adminUID == "admin" {
+		return true, nil
+	}
+	if strings.TrimSpace(adminUID) == "" {
+		return false, nil
+	}
+	if strings.TrimSpace(method) == "" || strings.TrimSpace(path) == "" {
+		return false, nil
+	}
+
+	// 2. 查询当前管理员的角色 + 用户组
+	var admin struct {
+		Role    string `db:"role"`
+		GroupID uint64 `db:"group_id"`
+	}
+	found, err := m.mySQLSession.
+		Select("role", "group_id").
+		From("admin_user").
+		Where("uid = ?", adminUID).
+		Limit(1).
+		Load(&admin)
+	if err != nil {
+		return false, err
+	}
+	if found == 0 {
+		// 用户不存在于 admin_user 表 → 直接拒绝
+		return false, nil
+	}
+	if admin.Role == "superAdmin" {
+		return true, nil
+	}
+
+	// 3. 查询该接口是否登记在 sys_api_permission 中
+	var perm struct {
+		ID             uint64 `db:"id"`
+		SuperAdminOnly int    `db:"super_admin_only"`
+		Status         int    `db:"status"`
+	}
+	found, err = m.mySQLSession.
+		Select("id", "super_admin_only", "status").
+		From("sys_api_permission").
+		Where("http_method = ? AND api_path = ? AND status = 1", method, path).
+		Limit(1).
+		Load(&perm)
+	if err != nil {
+		return false, err
+	}
+	if found == 0 {
+		// 该接口未登记 → 保守放行（避免误伤未登记接口）。
+		// 生产环境如需严格模式，改为 return false, nil 即可。
+		return true, nil
+	}
+
+	// 4. 权限记录禁止普通管理员访问
+	if perm.SuperAdminOnly == 1 {
+		return false, nil
+	}
+
+	// 5. 校验用户所属组是否绑定了该权限
+	if admin.GroupID == 0 {
+		return false, nil
+	}
+	var cnt int64
+	_, err = m.mySQLSession.
+		Select("COUNT(1)").
+		From("sys_role_api_permission").
+		Where("role_id = ? AND api_permission_id = ?", admin.GroupID, perm.ID).
+		Load(&cnt)
+	if err != nil {
+		return false, err
+	}
+	return cnt > 0, nil
 }
 
 // GetRedisConn GetRedisConn
