@@ -744,11 +744,12 @@ func (m *Context) adminPermission(
 
 	// 2. 查询当前管理员的角色 + 用户组
 	var admin struct {
-		Role    string `db:"role"`
-		GroupID uint64 `db:"group_id"`
+		Role     string `db:"role"`
+		GroupID  uint64 `db:"group_id"`
+		ClientID int    `db:"client_id"`
 	}
 	found, err := m.mySQLSession.
-		Select("role", "group_id").
+		Select("role", "group_id", "client_id").
 		From("admin_user").
 		Where("uid = ?", adminUID).
 		Limit(1).
@@ -773,7 +774,7 @@ func (m *Context) adminPermission(
 	found, err = m.mySQLSession.
 		Select("id", "super_admin_only", "status").
 		From("sys_api_permission").
-		Where("http_method = ? AND api_path = ? AND status = 1", method, path).
+		Where("http_method = ? AND api_path = ? AND status = 1 AND client_id = ?", method, path, admin.ClientID).
 		Limit(1).
 		Load(&perm)
 	if err != nil {
