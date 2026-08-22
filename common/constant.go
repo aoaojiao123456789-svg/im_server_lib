@@ -27,12 +27,12 @@ const (
 	ChannelTypeCommunityTopic
 	//  ChannelTypeInfo 资讯类频道
 	ChannelTypeInfo
-	ChannelTypeData       = 7  // 数据频道
-	ChannelTypeTemp       = 8  // 临时频道
-	ChannelTypeLive       = 9  // 直播频道(直播频道不会保存最近会话数据)
-	ChannelTypeVisitors   = 10 // 访客频道 (频道id即为访客id，此频道只支持一个访客订阅者，多个客服订阅者，ChannelTypeCustomerService频道已过时，使用ChannelTypeVisitors代替)
-	ChannelTypeAgent      = 11 // 单聊Agent频道（AI Agent频道，频道ID内部结构为UID@AgentID的结构，类似单聊频道，此频道会针对于AI Agent场景做优化）
-	ChannelTypeAgentGroup = 12 // 群聊Agent频道（AI Agent群聊频道，类似群聊频道，此频道会针对于多Agent协同场景做优化）
+	ChannelTypeData       // 数据频道
+	ChannelTypeTemp       // 临时频道
+	ChannelTypeLive       // 直播频道(直播频道不会保存最近会话数据)
+	ChannelTypeVisitors   // 访客频道 (频道id即为访客id，此频道只支持一个访客订阅者，多个客服订阅者，ChannelTypeCustomerService频道已过时，使用ChannelTypeVisitors代替)
+	ChannelTypeAgent      // 单聊Agent频道（AI Agent频道，频道ID内部结构为UID@AgentID的结构，类似单聊频道，此频道会针对于AI Agent场景做优化）
+	ChannelTypeAgentGroup // 群聊Agent频道（AI Agent群聊频道，类似群聊频道，此频道会针对于多Agent协同场景做优化）
 )
 
 // GroupMemberStatus 群成员状态
