@@ -608,7 +608,7 @@ func (c *Context) checkAdminPermission(ctx *wkhttp.Context) {
 	ok, err := c.adminPermission(adminUID, method, path)
 	if err != nil {
 		ctx.Abort()
-		ctx.JSON(http.StatusUnauthorized, gin.H{
+		ctx.JSON(http.StatusForbidden, gin.H{
 			"msg": "无权限访问该接口！",
 		})
 		return
@@ -616,7 +616,7 @@ func (c *Context) checkAdminPermission(ctx *wkhttp.Context) {
 
 	if !ok {
 		ctx.Abort()
-		ctx.JSON(http.StatusUnauthorized, gin.H{
+		ctx.JSON(http.StatusForbidden, gin.H{
 			"msg": "无权限访问该接口！",
 		})
 		return
