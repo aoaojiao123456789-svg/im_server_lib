@@ -89,6 +89,7 @@ type Config struct {
 		APIBaseURL  string // api的基地址 如果没有配置默认未 BaseURL + /v1
 		WebLoginURL string // web登录地址
 		Milvus      string // milvus服务地址 x.x.x.x:8080
+		AiAgent     string // AiAgent地址
 	}
 	// ---------- 日志配置 ----------
 	Logger struct {
@@ -314,10 +315,12 @@ func New() *Config {
 			APIBaseURL  string
 			WebLoginURL string
 			Milvus      string
+			AiAgent     string
 		}{
 			BaseURL:     "",
 			WebLoginURL: "",
 			Milvus:      "",
+			AiAgent:     "",
 		},
 
 		// ---------- db配置 ----------
@@ -569,6 +572,7 @@ func (c *Config) ConfigureWithViper(vp *viper.Viper) {
 	c.External.WebLoginURL = c.getString("external.webLoginURL", c.External.WebLoginURL)
 	c.External.BaseURL = c.getString("external.baseURL", c.External.BaseURL)
 	c.External.Milvus = c.getString("external.milvus", c.External.Milvus)
+	c.External.AiAgent = c.getString("external.aiAgent", c.External.AiAgent)
 
 	if strings.TrimSpace(c.External.WebLoginURL) == "" {
 		c.External.WebLoginURL = fmt.Sprintf("http://%s:82", c.External.IP)
