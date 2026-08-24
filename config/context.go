@@ -735,10 +735,19 @@ func (m *Context) adminPermission(
 	if adminUID == "admin" {
 		return true, nil
 	}
+
 	if strings.TrimSpace(adminUID) == "" {
+		fmt.Printf(
+			"[adminPermission] permission denied: adminUID is empty\n",
+		)
 		return false, nil
 	}
+
 	if strings.TrimSpace(method) == "" || strings.TrimSpace(path) == "" {
+		fmt.Printf(
+			"[adminPermission] permission denied: invalid request, adminUID=%s, method=%s, path=%s\n",
+			adminUID, method, path,
+		)
 		return false, nil
 	}
 
@@ -748,19 +757,30 @@ func (m *Context) adminPermission(
 		GroupID  uint64 `db:"group_id"`
 		ClientID int    `db:"client_id"`
 	}
+
 	found, err := m.mySQLSession.
 		Select("role", "group_id", "client_id").
 		From("admin_user").
 		Where("uid = ?", adminUID).
 		Limit(1).
 		Load(&admin)
+
 	if err != nil {
+		fmt.Printf(
+			"[adminPermission] permission check error: query admin user failed, adminUID=%s, method=%s, path=%s, err=%v\n",
+			adminUID, method, path, err,
+		)
 		return false, err
 	}
+
 	if found == 0 {
-		// 用户不存在于 admin_user 表 → 直接拒绝
+		fmt.Printf(
+			"[adminPermission] permission denied: admin user not found, adminUID=%s, method=%s, path=%s\n",
+			adminUID, method, path,
+		)
 		return false, nil
 	}
+
 	if admin.Role == "superAdmin" {
 		return true, nil
 	}
@@ -771,40 +791,93 @@ func (m *Context) adminPermission(
 		SuperAdminOnly int    `db:"super_admin_only"`
 		Status         int    `db:"status"`
 	}
+
 	found, err = m.mySQLSession.
 		Select("id", "super_admin_only", "status").
 		From("sys_api_permission").
-		Where("http_method = ? AND api_path = ? AND status = 1 AND client_id = ?", method, path, admin.ClientID).
+		Where(
+			"http_method = ? AND api_path = ? AND status = 1 AND client_id = ?",
+			method,
+			path,
+			admin.ClientID,
+		).
 		Limit(1).
 		Load(&perm)
+
 	if err != nil {
+		fmt.Printf(
+			"[adminPermission] permission check error: query api permission failed, adminUID=%s, method=%s, path=%s, clientID=%d, err=%v\n",
+			adminUID, method, path, admin.ClientID, err,
+		)
 		return false, err
 	}
+
 	if found == 0 {
-		// 该接口未登记 → 保守放行（避免误伤未登记接口）。
-		// 生产环境如需严格模式，改为 return false, nil 即可。
+		// 该接口未登记 → 保守放行
 		return true, nil
 	}
 
 	// 4. 权限记录禁止普通管理员访问
 	if perm.SuperAdminOnly == 1 {
+		fmt.Printf(
+			"[adminPermission] permission denied: super admin only, adminUID=%s, method=%s, path=%s, permissionID=%d\n",
+			adminUID,
+			method,
+			path,
+			perm.ID,
+		)
 		return false, nil
 	}
 
 	// 5. 校验用户所属组是否绑定了该权限
 	if admin.GroupID == 0 {
+		fmt.Printf(
+			"[adminPermission] permission denied: admin group is empty, adminUID=%s, method=%s, path=%s, clientID=%d\n",
+			adminUID,
+			method,
+			path,
+			admin.ClientID,
+		)
 		return false, nil
 	}
+
 	var cnt int64
 	_, err = m.mySQLSession.
 		Select("COUNT(1)").
 		From("sys_role_api_permission").
-		Where("role_id = ? AND api_permission_id = ?", admin.GroupID, perm.ID).
+		Where(
+			"role_id = ? AND api_permission_id = ?",
+			admin.GroupID,
+			perm.ID,
+		).
 		Load(&cnt)
+
 	if err != nil {
+		fmt.Printf(
+			"[adminPermission] permission check error: query role api permission failed, adminUID=%s, method=%s, path=%s, groupID=%d, permissionID=%d, err=%v\n",
+			adminUID,
+			method,
+			path,
+			admin.GroupID,
+			perm.ID,
+			err,
+		)
 		return false, err
 	}
-	return cnt > 0, nil
+
+	if cnt == 0 {
+		fmt.Printf(
+			"[adminPermission] permission denied: api permission not assigned to group, adminUID=%s, method=%s, path=%s, groupID=%d, permissionID=%d\n",
+			adminUID,
+			method,
+			path,
+			admin.GroupID,
+			perm.ID,
+		)
+		return false, nil
+	}
+
+	return true, nil
 }
 
 // GetRedisConn GetRedisConn
