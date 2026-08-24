@@ -88,8 +88,13 @@ type Config struct {
 		H5BaseURL   string // h5页面的基地址 如果没有配置默认未 BaseURL + /web
 		APIBaseURL  string // api的基地址 如果没有配置默认未 BaseURL + /v1
 		WebLoginURL string // web登录地址
-		Milvus      string // milvus服务地址 x.x.x.x:8080
 		AiAgent     string // AiAgent地址
+	}
+	// ---------- Milvus ----------
+	Milvus struct {
+		Addr     string
+		UserName string
+		PassWord string
 	}
 	// ---------- 日志配置 ----------
 	Logger struct {
@@ -314,13 +319,21 @@ func New() *Config {
 			H5BaseURL   string
 			APIBaseURL  string
 			WebLoginURL string
-			Milvus      string
 			AiAgent     string
 		}{
 			BaseURL:     "",
 			WebLoginURL: "",
-			Milvus:      "",
 			AiAgent:     "",
+		},
+		// ---------- Milvus ----------
+		Milvus: struct {
+			Addr     string
+			UserName string
+			PassWord string
+		}{
+			Addr:     "",
+			UserName: "",
+			PassWord: "",
 		},
 
 		// ---------- db配置 ----------
@@ -571,8 +584,11 @@ func (c *Config) ConfigureWithViper(vp *viper.Viper) {
 	}
 	c.External.WebLoginURL = c.getString("external.webLoginURL", c.External.WebLoginURL)
 	c.External.BaseURL = c.getString("external.baseURL", c.External.BaseURL)
-	c.External.Milvus = c.getString("external.milvus", c.External.Milvus)
 	c.External.AiAgent = c.getString("external.aiAgent", c.External.AiAgent)
+
+	c.Milvus.Addr = c.getString("milvus.addr", c.Milvus.Addr)
+	c.Milvus.UserName = c.getString("milvus.userName", c.Milvus.UserName)
+	c.Milvus.PassWord = c.getString("milvus.passWord", c.Milvus.PassWord)
 
 	if strings.TrimSpace(c.External.WebLoginURL) == "" {
 		c.External.WebLoginURL = fmt.Sprintf("http://%s:82", c.External.IP)
