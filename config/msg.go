@@ -689,6 +689,7 @@ type SyncChannelMessageReq struct {
 	EndMessageSeq   uint32   `json:"end_message_seq"`   // 结束序列号
 	Limit           int      `json:"limit"`             // 每次同步数量限制
 	PullMode        PullMode `json:"pull_mode"`         // 拉取模式
+	StreamV2        uint8    `json:"stream_v2"`         // 是否使用stream_v2
 }
 
 // SyncChannelMessageResp 同步频道消息返回
