@@ -1002,6 +1002,11 @@ type MessageResp struct {
 	VoiceStatus int `json:"voice_status"` // 语音状态 0.未读 1.已读
 
 	payloadMap map[string]interface{}
+
+	// v2 版本的stream的字段
+	End        uint8  `json:"end,omitempty"` // 是否是最后一段
+	EndReason  uint8  `json:"end_reason,omitempty"`
+	StreamData []byte `json:"stream_data,omitempty"` // 消息块合并后的字节
 }
 
 // GetPayloadMap GetPayloadMap
