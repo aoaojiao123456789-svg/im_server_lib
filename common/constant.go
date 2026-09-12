@@ -185,6 +185,8 @@ const (
 	CMDMessageErase = "messageEerase"
 	// 配置变更
 	CMDConfigChange = "configChange"
+	// 客服接待会话更新
+	CMDSessionUpdate = "sessionUpdate"
 )
 
 // UserDeviceTokenPrefix 用户设备token缓存前缀
