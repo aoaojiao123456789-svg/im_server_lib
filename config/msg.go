@@ -358,6 +358,16 @@ func (c *Context) IMDeleteConversation(req DeleteConversationReq) error {
 	return c.handlerIMError(resp)
 }
 
+// IMDeleteConversationHard 硬删除最近会话
+func (c *Context) IMDeleteConversationHard(req DeleteConversationReq) error {
+
+	resp, err := network.Post(c.cfg.WuKongIM.APIURL+"/conversations/deleteHard", []byte(util.ToJson(req)), nil)
+	if err != nil {
+		return nil
+	}
+	return c.handlerIMError(resp)
+}
+
 // IMSyncUserConversation 同步用户会话数据
 func (c *Context) IMSyncUserConversation(uid string, version int64, msgCount int64, lastMsgSeqs string, larges []*Channel) ([]*SyncUserConversationResp, error) {
 
