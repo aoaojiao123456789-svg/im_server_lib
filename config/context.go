@@ -632,28 +632,39 @@ func (c *Context) isIPInAdminWhitelist(ip string, clientId int, uid string) (boo
 		return true, nil
 	}
 
-	isOpen := 1
+	// 定义应用属性结构体，方便一次性查询多个字段
+	var appInfo struct {
+		IsWhitelistOpen int `db:"is_whitelist_open"`
+		AppType         int `db:"app_type"`
+	}
 
-	//超管没有开关限制
-	if uid != "admin" {
+	// 默认开关开启，app_type 为 0
+	appInfo.IsWhitelistOpen = 1
+
+	// 只要传了 clientId，无论是超管还是普通用户，都先查询 app_type
+	if clientId != 0 {
 		query := c.mySQLSession.
-			Select("is_whitelist_open").
-			From("workplace_app")
-
-		query = query.Where("id = ?", clientId)
+			Select("is_whitelist_open", "app_type").
+			From("workplace_app").
+			Where("id = ?", clientId)
 
 		// 执行加载并释放结果
-		_, err := query.Limit(1).Load(&isOpen)
+		_, err := query.Limit(1).Load(&appInfo)
 		if err != nil {
+			fmt.Printf("查询白名单开关失败: %v, clientId: %d\n", err, clientId)
 			return false, err
 		}
 
-		if err != nil {
-			fmt.Printf("查询白名单开关失败: %v, clientId: %d\n", err, clientId)
+		// 需求：如果是 app_type == 1，所有人（包括超管）都不限制 IP 白名单，直接放行
+		if appInfo.AppType == 1 {
+			return true, nil
 		}
+	}
 
+	// 2. 开关判断（仅对非超管生效）
+	if uid != "admin" {
 		// 开关关闭，直接放行
-		if isOpen == 0 {
+		if appInfo.IsWhitelistOpen == 0 {
 			return true, nil
 		}
 	}
@@ -700,7 +711,7 @@ func (c *Context) isIPInAdminWhitelist(ip string, clientId int, uid string) (boo
 
 	builder = builder.Where("("+strings.Join(conds, " OR ")+")", args...)
 
-	// 非超管且指定了平台时，增加隔离条件,超管只要存在IP即可放行
+	// 非超管且指定了平台时，增加隔离条件；超管只要存在 IP 记录即可放行
 	if clientId != 0 && uid != "admin" {
 		builder = builder.Where("client_id = ?", clientId)
 	}
