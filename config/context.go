@@ -641,35 +641,36 @@ func (c *Context) isIPInAdminWhitelist(ip string, clientId int, uid string) (boo
 	// 默认开关开启，app_type 为 0
 	appInfo.IsWhitelistOpen = 1
 
-	// 只要传了 clientId，无论是超管还是普通用户，都先查询 app_type
+	// 2. 查询应用配置（只要指定了 clientId）
 	if clientId != 0 {
 		query := c.mySQLSession.
 			Select("is_whitelist_open", "app_type").
 			From("workplace_app").
 			Where("id = ?", clientId)
 
-		// 执行加载并释放结果
 		_, err := query.Limit(1).Load(&appInfo)
 		if err != nil {
 			fmt.Printf("查询白名单开关失败: %v, clientId: %d\n", err, clientId)
 			return false, err
 		}
-
-		// 需求：如果是 app_type == 1，所有人（包括超管）都不限制 IP 白名单，直接放行
-		if appInfo.AppType == 1 {
-			return true, nil
-		}
 	}
 
-	// 2. 开关判断（仅对非超管生效）
-	if uid != "admin" {
-		// 开关关闭，直接放行
-		if appInfo.IsWhitelistOpen == 0 {
-			return true, nil
-		}
+	// 规则 1: 只要 app_type == 1，所有人（包含 admin）都直接放行
+	if appInfo.AppType == 1 {
+		return true, nil
 	}
 
-	// 3. 校验具体的 IP/网段记录
+	// 规则 2: 当 app_type != 1 时
+	// 如果不是 admin 且 开关关闭(0)，直接放行
+	if uid != "admin" && appInfo.IsWhitelistOpen == 0 {
+		return true, nil
+	}
+
+	// 只有在以下情况会走到这里继续校验 IP 白名单：
+	// 1. app_type != 1 且 uid == "admin" (admin 强制校验)
+	// 2. app_type != 1 且 uid != "admin" 且 IsWhitelistOpen == 1 (普通账号开启了开关)
+
+	// 3. 执行具体的 IP/网段记录校验
 	var cnt int64
 	builder := c.mySQLSession.
 		Select("COUNT(1)").
