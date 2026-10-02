@@ -189,6 +189,10 @@ const (
 	CMDSessionUpdate = "sessionUpdate"
 	// 客服会话结束
 	CMDSessionEnd = "sessionEnd"
+	// 转人工申请
+	CMDSessionTransfer = "sessionTransfer"
+	// 人工客服接入
+	CMDSessionTransferAccept = "sessionTransferAccept"
 )
 
 // UserDeviceTokenPrefix 用户设备token缓存前缀
