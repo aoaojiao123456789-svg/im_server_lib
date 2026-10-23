@@ -193,6 +193,8 @@ const (
 	CMDSessionTransfer = "sessionTransfer"
 	// 人工客服接入
 	CMDSessionTransferAccept = "sessionTransferAccept"
+	// 会话聊天消息更新
+	CMDSessionMessageUpdate = "sessionMessageUpdate"
 )
 
 // UserDeviceTokenPrefix 用户设备token缓存前缀
