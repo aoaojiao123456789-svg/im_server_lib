@@ -98,6 +98,7 @@ const (
 	HotlineAssignTo ContentType = 1200 // 分配客服
 	HotlineSolved   ContentType = 1201 // 已解决
 	HotlineReopen   ContentType = 1202 // 会话被重开
+	HotlineQueue    ContentType = 1203 // 排队中
 
 	// ---------- 音视频 ----------
 	VideoCallResult ContentType = 9989 // 音视频通话结果
