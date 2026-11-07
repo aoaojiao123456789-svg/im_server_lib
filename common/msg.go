@@ -99,6 +99,7 @@ const (
 	HotlineSolved   ContentType = 1201 // 已解决
 	HotlineReopen   ContentType = 1202 // 会话被重开
 	HotlineQueue    ContentType = 1203 // 排队中
+	HotlineTransfer ContentType = 1204 // 转交
 
 	// ---------- 音视频 ----------
 	VideoCallResult ContentType = 9989 // 音视频通话结果
